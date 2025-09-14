@@ -158,21 +158,19 @@ INSERT INTO students (id, user_id, roll_number, division_id, year) VALUES
   ('std-19', 'user-s19', 'EXCSB019', 'div-excs-b', 3),
   ('std-20', 'user-s20', 'EXTCA020', 'div-extc-a', 3);
 
--- Insert sample timetable entries for Monday
+-- Insert sample timetable entries for Monday (conflict-free scheduling)
 INSERT INTO timetables (division_id, subject_id, faculty_id, room_id, time_slot_id, day_of_week) VALUES
-  -- Monday schedule for IT-A
+  -- Monday schedule for IT-A 
   ('div-it-a', 'subj-db', 'fac-1', 'room-101', 'slot-1', 1),
-  ('div-it-a', 'subj-web', 'fac-2', 'lab-201', 'slot-2', 1),
+  ('div-it-a', 'subj-web', 'fac-2', 'auditorium', 'slot-2', 1),  -- Theory portion in auditorium
   ('div-it-a', 'subj-math', 'fac-1', 'room-101', 'slot-3', 1),
   
-  -- Monday schedule for CS-A
+  -- Monday schedule for CS-A (different rooms and time slots)
   ('div-cs-a', 'subj-ds', 'fac-3', 'room-102', 'slot-1', 1),
-  ('div-cs-a', 'subj-prog', 'fac-4', 'lab-202', 'slot-2', 1),
   ('div-cs-a', 'subj-algo', 'fac-3', 'room-102', 'slot-3', 1),
   
-  -- Monday schedule for EXCS-A
-  ('div-excs-a', 'subj-de', 'fac-5', 'room-105', 'slot-1', 1),
-  ('div-excs-a', 'subj-vlsi', 'fac-6', 'lab-301', 'slot-2', 1),
-  ('div-excs-a', 'subj-micro', 'fac-5', 'room-105', 'slot-3', 1);
+  -- Monday schedule for EXCS-A (different time slots to avoid conflicts)
+  ('div-excs-a', 'subj-de', 'fac-5', 'room-105', 'slot-2', 1),
+  ('div-excs-a', 'subj-micro', 'fac-6', 'auditorium', 'slot-4', 1);
 
 COMMIT;

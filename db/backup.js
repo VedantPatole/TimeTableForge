@@ -5,10 +5,16 @@
  * Handles database backups and restoration for different environments
  */
 
-const { Pool } = require('pg');
-const fs = require('fs');
-const path = require('path');
-const { execSync } = require('child_process');
+import pkg from 'pg';
+const { Pool } = pkg;
+import fs from 'fs';
+import path from 'path';
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -202,8 +208,8 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-module.exports = { createBackup, restoreBackup, listBackups };
+export { createBackup, restoreBackup, listBackups };

@@ -5,16 +5,16 @@
  * Combines migration, backup, seeding, and monitoring tools
  */
 
-const { runMigrations } = require('./migrate');
-const { createBackup, restoreBackup, listBackups } = require('./backup');
-const { seedDatabase, clearDatabase } = require('./seed');
-const { 
+import { runMigrations } from './migrate.js';
+import { createBackup, restoreBackup, listBackups } from './backup.js';
+import { seedDatabase, clearDatabase } from './seed.js';
+import { 
   analyzeTableSizes, 
   analyzeIndexUsage, 
   analyzeSlowQueries, 
   analyzeConnections, 
   suggestOptimizations 
-} = require('./monitor');
+} from './monitor.js';
 
 function showHelp() {
   console.log('🗄️  Database Manager - Unified CLI Tool');
@@ -199,11 +199,11 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-module.exports = {
+export {
   quickSetup,
   healthCheck,
   fullAnalysis

@@ -5,9 +5,15 @@
  * Seeds database with environment-specific data
  */
 
-const { Pool } = require('pg');
-const fs = require('fs');
-const path = require('path');
+import pkg from 'pg';
+const { Pool } = pkg;
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -112,8 +118,8 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-module.exports = { seedDatabase, clearDatabase };
+export { seedDatabase, clearDatabase };

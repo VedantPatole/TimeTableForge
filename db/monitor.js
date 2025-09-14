@@ -5,7 +5,8 @@
  * Provides query analysis, index usage, and performance metrics
  */
 
-const { Pool } = require('pg');
+import pkg from 'pg';
+const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -309,11 +310,11 @@ async function main() {
   }
 }
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   main();
 }
 
-module.exports = { 
+export { 
   analyzeTableSizes, 
   analyzeIndexUsage, 
   analyzeSlowQueries, 

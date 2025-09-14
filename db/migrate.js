@@ -5,9 +5,15 @@
  * Applies migration scripts in order and tracks applied migrations
  */
 
-const { Pool } = require('pg');
-const fs = require('fs');
-const path = require('path');
+import pkg from 'pg';
+const { Pool } = pkg;
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Database connection
 const pool = new Pool({
@@ -93,8 +99,8 @@ async function runMigrations() {
 }
 
 // Run migrations if this script is executed directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   runMigrations();
 }
 
-module.exports = { runMigrations };
+export { runMigrations };
