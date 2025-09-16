@@ -13,6 +13,7 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(name: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 
   // Departments
@@ -83,6 +84,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(name: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.name, name));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user || undefined;
   }
 
@@ -418,16 +424,16 @@ export class DatabaseStorage implements IStorage {
 
     // Create sample users and faculty
     const facultyUsers = [
-      { name: "Dr. Smith", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Prof. Johnson", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Dr. Williams", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Dr. Chen", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Prof. Davis", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Dr. Wilson", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Prof. Miller", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Dr. Brown", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Prof. Garcia", passwordHash: "hashed_password", role: "faculty" },
-      { name: "Dr. Martinez", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Dr. Smith", email: "dr.smith@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Prof. Johnson", email: "prof.johnson@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Dr. Williams", email: "dr.williams@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Dr. Chen", email: "dr.chen@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Prof. Davis", email: "prof.davis@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Dr. Wilson", email: "dr.wilson@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Prof. Miller", email: "prof.miller@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Dr. Brown", email: "dr.brown@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Prof. Garcia", email: "prof.garcia@college.edu", passwordHash: "hashed_password", role: "faculty" },
+      { name: "Dr. Martinez", email: "dr.martinez@college.edu", passwordHash: "hashed_password", role: "faculty" },
     ];
 
     const createdFaculty = [];
@@ -448,6 +454,7 @@ export class DatabaseStorage implements IStorage {
     for (let i = 0; i < 50; i++) {
       const user = await this.createUser({
         name: `Student ${i + 1}`,
+        email: `student${i + 1}@student.college.edu`,
         passwordHash: "hashed_password",
         role: "student",
       });
