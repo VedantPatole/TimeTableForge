@@ -55,6 +55,7 @@ export interface IStorage {
   getTimetablesByDivision(divisionId: string): Promise<Timetable[]>;
   getTodaysTimetables(): Promise<any[]>;
   createTimetable(timetable: InsertTimetable): Promise<Timetable>;
+  createTimetableWithTransaction(timetableData: InsertTimetable[]): Promise<Timetable[]>;
 
   // Dashboard Stats
   getDashboardStats(): Promise<{
@@ -205,6 +206,17 @@ export class DatabaseStorage implements IStorage {
   async createTimetable(insertTimetable: InsertTimetable): Promise<Timetable> {
     const [timetable] = await db.insert(timetables).values(insertTimetable).returning();
     return timetable;
+  }
+
+  async createTimetableWithTransaction(timetableData: InsertTimetable[]): Promise<Timetable[]> {
+    return await db.transaction(async (tx) => {
+      const results = [];
+      for (const data of timetableData) {
+        const [timetable] = await tx.insert(timetables).values(data).returning();
+        results.push(timetable);
+      }
+      return results;
+    });
   }
 
   async getTodaysTimetables(): Promise<any[]> {

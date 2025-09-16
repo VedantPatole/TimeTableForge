@@ -3,10 +3,14 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDepartmentSchema, insertDivisionSchema, insertStudentSchema, insertFacultySchema, insertRoomSchema, insertSubjectSchema, insertTimeSlotSchema, insertTimetableSchema, insertUserSchema } from "@shared/schema";
 import { authenticateToken, requireRole, type AuthenticatedRequest } from "./middleware/auth";
+import { AvailabilityController } from "./controllers/availabilityController";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize sample data on server start
   await storage.initializeSampleData();
+
+  // Initialize availability controller
+  const availabilityController = new AvailabilityController();
 
   // Dashboard routes
   app.get("/api/dashboard/stats", async (req, res) => {
@@ -302,6 +306,243 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(timeSlot);
     } catch (error) {
       res.status(400).json({ error: "Invalid time slot data" });
+    }
+  });
+
+  // === CORE TIMETABLE LOGIC API ENDPOINTS ===
+  
+  // GET /api/timetable/available-slots - Get available faculty/room/slot combinations
+  app.get("/api/timetable/available-slots", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { subject_id, slot_id, day_of_week, division_id } = req.query;
+
+      // Validation
+      if (!day_of_week || !division_id) {
+        return res.status(400).json({
+          success: false,
+          error: "day_of_week and division_id are required parameters"
+        });
+      }
+
+      const dayOfWeekNum = parseInt(day_of_week as string);
+      if (dayOfWeekNum < 1 || dayOfWeekNum > 7) {
+        return res.status(400).json({
+          success: false,
+          error: "day_of_week must be between 1 (Monday) and 7 (Sunday)"
+        });
+      }
+
+      // For students, verify they can only query their own division
+      if (req.user?.role === 'student') {
+        const studentData = await storage.getStudentWithDepartment(req.user.id);
+        if (!studentData || studentData.division.id !== division_id) {
+          return res.status(403).json({
+            success: false,
+            error: "Students can only view availability for their own division"
+          });
+        }
+      }
+
+      const availableSlots = await availabilityController.getAvailableSlots({
+        subjectId: subject_id as string,
+        timeSlotId: slot_id as string,
+        dayOfWeek: dayOfWeekNum,
+        divisionId: division_id as string,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          available_combinations: availableSlots,
+          total_available: availableSlots.length,
+          query_parameters: {
+            subject_id: subject_id || null,
+            slot_id: slot_id || null,
+            day_of_week: dayOfWeekNum,
+            division_id: division_id
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching available slots:', error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch available slots"
+      });
+    }
+  });
+
+  // POST /api/timetable/create - Create timetable entries with comprehensive clash detection
+  app.post("/api/timetable/create", authenticateToken, requireRole(['admin', 'faculty']), async (req, res) => {
+    try {
+      const timetableEntries = Array.isArray(req.body) ? req.body : [req.body];
+
+      // Validate each entry
+      const validatedEntries = [];
+      const allConflicts = [];
+
+      for (const entry of timetableEntries) {
+        // Parse and validate the entry
+        const parsedEntry = insertTimetableSchema.parse(entry);
+        validatedEntries.push(parsedEntry);
+
+        // Check for clashes
+        const clashResult = await availabilityController.checkClashes(
+          parsedEntry.divisionId,
+          parsedEntry.facultyId,
+          parsedEntry.roomId,
+          parsedEntry.timeSlotId,
+          parsedEntry.dayOfWeek
+        );
+
+        if (clashResult.hasConflict) {
+          allConflicts.push({
+            entry: parsedEntry,
+            conflicts: clashResult.conflicts
+          });
+        }
+      }
+
+      // If any conflicts exist, return all of them
+      if (allConflicts.length > 0) {
+        return res.status(409).json({
+          success: false,
+          error: "Timetable conflicts detected",
+          conflicts: allConflicts.map(conflict => ({
+            conflicted_entry: {
+              division_id: conflict.entry.divisionId,
+              subject_id: conflict.entry.subjectId,
+              faculty_id: conflict.entry.facultyId,
+              room_id: conflict.entry.roomId,
+              time_slot_id: conflict.entry.timeSlotId,
+              day_of_week: conflict.entry.dayOfWeek
+            },
+            conflict_details: conflict.conflicts.map(c => ({
+              type: c.type,
+              message: c.message,
+              details: c.details
+            }))
+          }))
+        });
+      }
+
+      // Create timetable entries using transaction for atomicity
+      const createdTimetables = await storage.createTimetableWithTransaction(validatedEntries);
+
+      res.status(201).json({
+        success: true,
+        data: {
+          created_entries: createdTimetables,
+          total_created: createdTimetables.length,
+          message: "Timetable entries created successfully"
+        }
+      });
+    } catch (error: any) {
+      console.error('Error creating timetable:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid timetable data format",
+          validation_errors: error.errors
+        });
+      }
+      res.status(500).json({
+        success: false,
+        error: "Failed to create timetable entries"
+      });
+    }
+  });
+
+  // GET /api/timetable/my-schedule - Get student's complete timetable
+  app.get("/api/timetable/my-schedule", authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res) => {
+    try {
+      // Get student's division
+      const studentData = await storage.getStudentWithDepartment(req.user!.id);
+      
+      if (!studentData) {
+        return res.status(404).json({
+          success: false,
+          error: "Student data not found"
+        });
+      }
+
+      // Get complete timetable for the student's division
+      const timetable = await availabilityController.getStudentTimetable(studentData.division.id);
+
+      // Group by day of week for better organization
+      const organizedSchedule: Record<number, any[]> = {
+        1: [], // Monday
+        2: [], // Tuesday
+        3: [], // Wednesday
+        4: [], // Thursday
+        5: [], // Friday
+        6: [], // Saturday
+        7: []  // Sunday
+      };
+
+      let totalClasses = 0;
+      const subjectsSummary = new Map();
+
+      timetable.forEach(entry => {
+        organizedSchedule[entry.dayOfWeek].push({
+          id: entry.id,
+          subject: entry.subject,
+          faculty: entry.faculty,
+          room: entry.room,
+          time_slot: entry.timeSlot
+        });
+
+        totalClasses++;
+
+        // Track subjects summary
+        const subjectKey = entry.subject.id;
+        if (!subjectsSummary.has(subjectKey)) {
+          subjectsSummary.set(subjectKey, {
+            subject: entry.subject,
+            total_classes: 0,
+            weekly_hours: 0
+          });
+        }
+        subjectsSummary.get(subjectKey).total_classes++;
+      });
+
+      res.json({
+        success: true,
+        data: {
+          student_info: {
+            division: studentData.division,
+            department: studentData.department
+          },
+          weekly_schedule: {
+            monday: organizedSchedule[1],
+            tuesday: organizedSchedule[2],
+            wednesday: organizedSchedule[3],
+            thursday: organizedSchedule[4],
+            friday: organizedSchedule[5],
+            saturday: organizedSchedule[6],
+            sunday: organizedSchedule[7]
+          },
+          summary: {
+            total_classes_per_week: totalClasses,
+            subjects: Array.from(subjectsSummary.values()),
+            daily_distribution: {
+              monday: organizedSchedule[1].length,
+              tuesday: organizedSchedule[2].length,
+              wednesday: organizedSchedule[3].length,
+              thursday: organizedSchedule[4].length,
+              friday: organizedSchedule[5].length,
+              saturday: organizedSchedule[6].length,
+              sunday: organizedSchedule[7].length
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching student schedule:', error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch student schedule"
+      });
     }
   });
 
