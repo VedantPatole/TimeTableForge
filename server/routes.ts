@@ -26,6 +26,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Validate college email domain
+      const allowedDomains = ['@college.edu', '@student.college.edu'];
+      const isValidCollegeEmail = allowedDomains.some(domain => email.endsWith(domain));
+      if (!isValidCollegeEmail) {
+        return res.status(400).json({
+          success: false,
+          error: "Please use a valid college email address"
+        });
+      }
+
       // Find user by email
       const user = await storage.getUserByEmail(email);
       if (!user) {
@@ -35,10 +45,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // For now, check if password matches the placeholder
-      // In production, this should use bcrypt.compare
-      const isValidPassword = password === "password123" || 
-        await bcrypt.compare(password, user.passwordHash);
+      // Validate password using bcrypt
+      const isValidPassword = await bcrypt.compare(password, user.passwordHash);
 
       if (!isValidPassword) {
         return res.status(401).json({ 
@@ -124,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Dashboard routes
-  app.get("/api/dashboard/stats", async (req, res) => {
+  app.get("/api/dashboard/stats", authenticateToken, async (req, res) => {
     try {
       const stats = await storage.getDashboardStats();
       res.json(stats);
@@ -133,7 +141,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/dashboard/todays-schedule", async (req, res) => {
+  app.get("/api/dashboard/todays-schedule", authenticateToken, async (req, res) => {
     try {
       const schedule = await storage.getTodaysTimetables();
       res.json(schedule);
@@ -142,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/dashboard/room-occupancy", async (req, res) => {
+  app.get("/api/dashboard/room-occupancy", authenticateToken, async (req, res) => {
     try {
       const occupancy = await storage.getRoomOccupancy();
       res.json(occupancy);
@@ -151,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/dashboard/department-overview", async (req, res) => {
+  app.get("/api/dashboard/department-overview", authenticateToken, async (req, res) => {
     try {
       const overview = await storage.getDepartmentOverview();
       res.json(overview);
@@ -161,7 +169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Users routes
-  app.get("/api/users", async (req, res) => {
+  app.get("/api/users", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       // This would typically require pagination
       res.json([]);
@@ -181,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Departments routes
-  app.get("/api/departments", async (req, res) => {
+  app.get("/api/departments", authenticateToken, async (req, res) => {
     try {
       const departments = await storage.getDepartments();
       res.json(departments);
@@ -201,7 +209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Divisions routes
-  app.get("/api/divisions", async (req, res) => {
+  app.get("/api/divisions", authenticateToken, async (req, res) => {
     try {
       const { departmentId } = req.query;
       const divisions = departmentId 
@@ -224,7 +232,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Students routes
-  app.get("/api/students", async (req, res) => {
+  app.get("/api/students", authenticateToken, requireRole(['admin', 'faculty']), async (req, res) => {
     try {
       const { divisionId } = req.query;
       const students = divisionId

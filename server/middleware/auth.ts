@@ -2,22 +2,19 @@ import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { storage } from '../storage';
 
-// For production, JWT_SECRET MUST be set as an environment variable
-// For development, we provide a default but warn about it
-const JWT_SECRET = process.env.JWT_SECRET || 
-  (process.env.NODE_ENV === 'development' 
-    ? 'dev-jwt-secret-key-CHANGE-IN-PRODUCTION-fixed-for-stability'
-    : undefined);
+// JWT_SECRET MUST be set as an environment variable for security
+// Only allow fallback in development with explicit warnings
+const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required in production. Please set JWT_SECRET in your environment.');
+  if (process.env.NODE_ENV === 'development') {
+    console.warn('⚠️  WARNING: JWT_SECRET not set. Using default for development only. Set JWT_SECRET for production!');
+  } else {
+    throw new Error('JWT_SECRET environment variable is required in non-development environments.');
+  }
 }
 
-if (process.env.NODE_ENV === 'development' && !process.env.JWT_SECRET) {
-  console.warn('⚠️  WARNING: Using default JWT_SECRET for development. Set JWT_SECRET environment variable in production!');
-}
-
-const jwtSecret: string = JWT_SECRET;
+const jwtSecret: string = JWT_SECRET || 'dev-jwt-secret-key-CHANGE-IN-PRODUCTION-fixed-for-stability';
 
 export interface AuthenticatedRequest extends Request {
   user?: {
