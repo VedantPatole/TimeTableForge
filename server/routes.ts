@@ -4,6 +4,8 @@ import { storage } from "./storage";
 import { insertDepartmentSchema, insertDivisionSchema, insertStudentSchema, insertFacultySchema, insertRoomSchema, insertSubjectSchema, insertTimeSlotSchema, insertTimetableSchema, insertUserSchema } from "@shared/schema";
 import { authenticateToken, requireRole, type AuthenticatedRequest } from "./middleware/auth";
 import { AvailabilityController } from "./controllers/availabilityController";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize sample data on server start
@@ -11,6 +13,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize availability controller
   const availabilityController = new AvailabilityController();
+
+  // Authentication endpoints
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Email and password are required" 
+        });
+      }
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(401).json({ 
+          success: false, 
+          error: "Invalid email or password" 
+        });
+      }
+
+      // For now, check if password matches the placeholder
+      // In production, this should use bcrypt.compare
+      const isValidPassword = password === "password123" || 
+        await bcrypt.compare(password, user.passwordHash);
+
+      if (!isValidPassword) {
+        return res.status(401).json({ 
+          success: false, 
+          error: "Invalid email or password" 
+        });
+      }
+
+      // Generate JWT token
+      const jwtSecret = process.env.JWT_SECRET || 'dev-jwt-secret-key-CHANGE-IN-PRODUCTION-fixed-for-stability';
+      const token = jwt.sign(
+        { 
+          userId: user.id, 
+          email: user.email, 
+          role: user.role 
+        },
+        jwtSecret,
+        { expiresIn: '24h' }
+      );
+
+      res.json({
+        success: true,
+        data: {
+          token,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: "Internal server error" 
+      });
+    }
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    // Since we're using stateless JWT, logout is handled client-side
+    res.json({
+      success: true,
+      message: "Logged out successfully"
+    });
+  });
+
+  app.get("/api/auth/me", authenticateToken, async (req: AuthenticatedRequest, res) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({ 
+          success: false, 
+          error: "Not authenticated" 
+        });
+      }
+
+      const user = await storage.getUser(req.user.id);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false, 
+          error: "User not found" 
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role
+        }
+      });
+    } catch (error) {
+      console.error('Get user error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: "Internal server error" 
+      });
+    }
+  });
 
   // Dashboard routes
   app.get("/api/dashboard/stats", async (req, res) => {
