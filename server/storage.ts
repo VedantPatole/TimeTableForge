@@ -28,6 +28,7 @@ export interface IStorage {
   // Students
   getStudents(): Promise<Student[]>;
   getStudentsByDivision(divisionId: string): Promise<Student[]>;
+  getStudentWithDepartment(userId: string): Promise<any>;
   createStudent(student: InsertStudent): Promise<Student>;
 
   // Faculty
@@ -122,6 +123,21 @@ export class DatabaseStorage implements IStorage {
 
   async getStudentsByDivision(divisionId: string): Promise<Student[]> {
     return await db.select().from(students).where(eq(students.divisionId, divisionId));
+  }
+
+  async getStudentWithDepartment(userId: string): Promise<any> {
+    const result = await db
+      .select({
+        student: students,
+        division: divisions,
+        department: departments
+      })
+      .from(students)
+      .innerJoin(divisions, eq(students.divisionId, divisions.id))
+      .innerJoin(departments, eq(divisions.departmentId, departments.id))
+      .where(eq(students.userId, userId));
+    
+    return result[0] || null;
   }
 
   async createStudent(insertStudent: InsertStudent): Promise<Student> {

@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertDepartmentSchema, insertDivisionSchema, insertStudentSchema, insertFacultySchema, insertRoomSchema, insertSubjectSchema, insertTimeSlotSchema, insertTimetableSchema, insertUserSchema } from "@shared/schema";
+import { authenticateToken, requireRole, type AuthenticatedRequest } from "./middleware/auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize sample data on server start
@@ -54,7 +55,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/users", async (req, res) => {
+  app.post("/api/users", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
       const user = await storage.createUser(userData);
@@ -74,7 +75,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/departments", async (req, res) => {
+  app.post("/api/departments", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const deptData = insertDepartmentSchema.parse(req.body);
       const department = await storage.createDepartment(deptData);
@@ -97,7 +98,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/divisions", async (req, res) => {
+  app.post("/api/divisions", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const divisionData = insertDivisionSchema.parse(req.body);
       const division = await storage.createDivision(divisionData);
@@ -120,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/students", async (req, res) => {
+  app.post("/api/students", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const studentData = insertStudentSchema.parse(req.body);
       const student = await storage.createStudent(studentData);
@@ -131,19 +132,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Faculty routes
-  app.get("/api/faculty", async (req, res) => {
+  app.get("/api/faculty", authenticateToken, async (req, res) => {
     try {
       const { departmentId } = req.query;
       const faculty = departmentId
         ? await storage.getFacultyByDepartment(departmentId as string)
         : await storage.getFaculty();
-      res.json(faculty);
+      
+      res.json({ 
+        success: true, 
+        data: faculty 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch faculty" });
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch faculty" 
+      });
     }
   });
 
-  app.post("/api/faculty", async (req, res) => {
+  app.post("/api/faculty", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const facultyData = insertFacultySchema.parse(req.body);
       const faculty = await storage.createFaculty(facultyData);
@@ -154,16 +162,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Rooms routes
-  app.get("/api/rooms", async (req, res) => {
+  app.get("/api/rooms", authenticateToken, async (req, res) => {
     try {
       const rooms = await storage.getRooms();
-      res.json(rooms);
+      
+      res.json({ 
+        success: true, 
+        data: rooms 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch rooms" });
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch rooms" 
+      });
     }
   });
 
-  app.post("/api/rooms", async (req, res) => {
+  app.post("/api/rooms", authenticateToken, requireRole(['admin', 'faculty']), async (req, res) => {
     try {
       const roomData = insertRoomSchema.parse(req.body);
       const room = await storage.createRoom(roomData);
@@ -173,20 +188,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Subjects routes
-  app.get("/api/subjects", async (req, res) => {
+  // Core Data API - Protected routes with JWT authentication
+  app.get("/api/subjects", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
-      const { departmentId } = req.query;
-      const subjects = departmentId
-        ? await storage.getSubjectsByDepartment(departmentId as string)
-        : await storage.getSubjects();
-      res.json(subjects);
+      let subjects;
+      
+      if (req.user?.role === 'student') {
+        // Students only see subjects from their department
+        const studentData = await storage.getStudentWithDepartment(req.user.id);
+        if (!studentData) {
+          return res.status(404).json({ 
+            success: false, 
+            error: "Student data not found" 
+          });
+        }
+        subjects = await storage.getSubjectsByDepartment(studentData.department.id);
+      } else {
+        // Faculty and admin can see all subjects or filter by department
+        const { departmentId } = req.query;
+        subjects = departmentId
+          ? await storage.getSubjectsByDepartment(departmentId as string)
+          : await storage.getSubjects();
+      }
+      
+      res.json({ 
+        success: true, 
+        data: subjects 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch subjects" });
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch subjects" 
+      });
     }
   });
 
-  app.post("/api/subjects", async (req, res) => {
+  // New endpoint: Get student's department and division info
+  app.get("/api/my-department", authenticateToken, requireRole(['student']), async (req: AuthenticatedRequest, res) => {
+    try {
+      const studentData = await storage.getStudentWithDepartment(req.user!.id);
+      
+      if (!studentData) {
+        return res.status(404).json({ 
+          success: false, 
+          error: "Student data not found" 
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        data: {
+          department: studentData.department,
+          division: studentData.division,
+          student: studentData.student
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch student department information" 
+      });
+    }
+  });
+
+  app.post("/api/subjects", authenticateToken, requireRole(['admin', 'faculty']), async (req, res) => {
     try {
       const subjectData = insertSubjectSchema.parse(req.body);
       const subject = await storage.createSubject(subjectData);
@@ -196,17 +261,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Time slots routes
-  app.get("/api/time-slots", async (req, res) => {
+  // Time slots routes (aliased as /api/slots for compatibility)
+  app.get("/api/slots", authenticateToken, async (req, res) => {
     try {
       const timeSlots = await storage.getTimeSlots();
-      res.json(timeSlots);
+      
+      res.json({ 
+        success: true, 
+        data: timeSlots 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch time slots" });
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch time slots" 
+      });
+    }
+  });
+  
+  // Keep existing route for backward compatibility
+  app.get("/api/time-slots", authenticateToken, async (req, res) => {
+    try {
+      const timeSlots = await storage.getTimeSlots();
+      
+      res.json({ 
+        success: true, 
+        data: timeSlots 
+      });
+    } catch (error) {
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch time slots" 
+      });
     }
   });
 
-  app.post("/api/time-slots", async (req, res) => {
+  app.post("/api/time-slots", authenticateToken, requireRole(['admin', 'faculty']), async (req, res) => {
     try {
       const timeSlotData = insertTimeSlotSchema.parse(req.body);
       const timeSlot = await storage.createTimeSlot(timeSlotData);
@@ -216,20 +305,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Timetables routes
-  app.get("/api/timetables", async (req, res) => {
+  // Timetables routes - Core data API with authentication
+  app.get("/api/timetables", authenticateToken, async (req: AuthenticatedRequest, res) => {
     try {
       const { divisionId } = req.query;
-      const timetables = divisionId
-        ? await storage.getTimetablesByDivision(divisionId as string)
-        : await storage.getTimetables();
-      res.json(timetables);
+      let timetables;
+      
+      if (req.user?.role === 'student') {
+        // Students only see timetables for their division
+        const studentData = await storage.getStudentWithDepartment(req.user.id);
+        if (!studentData) {
+          return res.status(404).json({ 
+            success: false, 
+            error: "Student data not found" 
+          });
+        }
+        timetables = await storage.getTimetablesByDivision(studentData.division.id);
+      } else {
+        // Faculty and admin can see all timetables or filter by division
+        timetables = divisionId
+          ? await storage.getTimetablesByDivision(divisionId as string)
+          : await storage.getTimetables();
+      }
+      
+      res.json({ 
+        success: true, 
+        data: timetables 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch timetables" });
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch timetables" 
+      });
     }
   });
 
-  app.post("/api/timetables", async (req, res) => {
+  app.post("/api/timetables", authenticateToken, requireRole(['admin', 'faculty']), async (req, res) => {
     try {
       const timetableData = insertTimetableSchema.parse(req.body);
       const timetable = await storage.createTimetable(timetableData);
