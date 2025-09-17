@@ -183,10 +183,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/users", authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(userData);
+      const { password, ...userData } = req.body;
+      
+      if (!password) {
+        return res.status(400).json({ error: "Password is required" });
+      }
+
+      // Hash the password before creating the user
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      const userDataWithHash = {
+        ...userData,
+        passwordHash: hashedPassword
+      };
+
+      const validatedData = insertUserSchema.parse(userDataWithHash);
+      const user = await storage.createUser(validatedData);
       res.json(user);
     } catch (error) {
+      console.error('Create user error:', error);
       res.status(400).json({ error: "Invalid user data" });
     }
   });
