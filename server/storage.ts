@@ -75,6 +75,9 @@ export interface IStorage {
 
   // Initialize sample data
   initializeSampleData(): Promise<void>;
+  
+  // Ensure admin user exists
+  ensureAdminUser(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -427,6 +430,7 @@ export class DatabaseStorage implements IStorage {
     const defaultPassword = "password123";
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
     
+    
     const facultyUsers = [
       { name: "Dr. Smith", email: "dr.smith@college.edu", passwordHash: hashedPassword, role: "faculty" },
       { name: "Prof. Johnson", email: "prof.johnson@college.edu", passwordHash: hashedPassword, role: "faculty" },
@@ -471,6 +475,30 @@ export class DatabaseStorage implements IStorage {
         year: Math.floor(i / 10) + 1,
       });
     }
+  }
+
+  async ensureAdminUser(): Promise<void> {
+    const adminEmail = "admin@college.edu";
+    
+    // Check if admin user already exists
+    const existingAdmin = await this.getUserByEmail(adminEmail);
+    if (existingAdmin) {
+      // Admin user already exists, don't modify it
+      return;
+    }
+
+    // Create admin user if it doesn't exist
+    const adminPassword = process.env.DEFAULT_ADMIN_PASSWORD || "password123";
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    
+    await this.createUser({
+      name: "Admin User",
+      email: adminEmail,
+      passwordHash: hashedPassword,
+      role: "admin",
+    });
+    
+    console.log("Admin user created with email:", adminEmail);
   }
 }
 

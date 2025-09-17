@@ -10,6 +10,9 @@ import jwt from "jsonwebtoken";
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize sample data on server start
   await storage.initializeSampleData();
+  
+  // Ensure admin user exists on every startup
+  await storage.ensureAdminUser();
 
   // Initialize availability controller
   const availabilityController = new AvailabilityController();

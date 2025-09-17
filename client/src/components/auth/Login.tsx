@@ -177,6 +177,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <div className="mt-6 p-3 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600 font-medium mb-2">Demo Credentials:</p>
             <div className="text-xs text-gray-500 space-y-1">
+              <p><strong>Admin:</strong> admin@college.edu</p>
               <p><strong>Student:</strong> student1@student.college.edu</p>
               <p><strong>Faculty:</strong> dr.smith@college.edu</p>
               <p><strong>Password:</strong> password123</p>
