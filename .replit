@@ -12,6 +12,7 @@ run = ["npm", "run", "start"]
 
 [env]
 PORT = "5000"
+DATABASE_URL = "postgresql://postgres.sdizjidluorrqprlkhux:UcrKwcOMFmqdtYhH@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres"
 
 [agent]
 integrations = ["javascript_database:1.0.0"]
