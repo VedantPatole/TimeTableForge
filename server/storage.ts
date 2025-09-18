@@ -29,6 +29,7 @@ export interface IStorage {
 
   // Students
   getStudents(): Promise<Student[]>;
+  getStudentsWithDetails(): Promise<any[]>;
   getStudentsByDivision(divisionId: string): Promise<Student[]>;
   getStudentWithDepartment(userId: string): Promise<any>;
   createStudent(student: InsertStudent): Promise<Student>;
@@ -130,6 +131,29 @@ export class DatabaseStorage implements IStorage {
 
   async getStudents(): Promise<Student[]> {
     return await db.select().from(students).orderBy(students.rollNumber);
+  }
+
+  async getStudentsWithDetails(): Promise<any[]> {
+    const result = await db
+      .select({
+        id: students.id,
+        rollNumber: students.rollNumber,
+        year: students.year,
+        userName: users.name,
+        userEmail: users.email,
+        divisionName: divisions.name,
+        departmentName: departments.name,
+        departmentCode: departments.code,
+        capacity: divisions.capacity,
+        createdAt: students.createdAt
+      })
+      .from(students)
+      .innerJoin(users, eq(students.userId, users.id))
+      .innerJoin(divisions, eq(students.divisionId, divisions.id))
+      .innerJoin(departments, eq(divisions.departmentId, departments.id))
+      .orderBy(students.year, departments.name, divisions.name, students.rollNumber);
+    
+    return result;
   }
 
   async getStudentsByDivision(divisionId: string): Promise<Student[]> {

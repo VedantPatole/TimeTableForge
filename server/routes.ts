@@ -6,6 +6,8 @@ import { authenticateToken, requireRole, type AuthenticatedRequest } from "./mid
 import { AvailabilityController } from "./controllers/availabilityController";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import multer from "multer";
+import * as XLSX from "xlsx";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize sample data on server start
@@ -255,10 +257,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { divisionId } = req.query;
       const students = divisionId
         ? await storage.getStudentsByDivision(divisionId as string)
-        : await storage.getStudents();
-      res.json(students);
+        : await storage.getStudentsWithDetails();
+      res.json({ 
+        success: true, 
+        data: students 
+      });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch students" });
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch students" 
+      });
     }
   });
 
